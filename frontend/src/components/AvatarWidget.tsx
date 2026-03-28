@@ -65,13 +65,13 @@ export default function AvatarWidget({ mode = "widget", botSlug }: AvatarWidgetP
     connect().then((success) => { if (!success) setAvatarFailed(true); });
   }, [botConfig]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Speak greeting on first connect
+  // Speak greeting on first connect — delay for LiveAvatar to fully initialise
   const greetingSpokenRef = useRef(false);
   useEffect(() => {
     if (avatarState.status === "connected" && botConfig && !greetingSpokenRef.current) {
       greetingSpokenRef.current = true;
       const greeting = language === "hi" ? botConfig.greeting_hi : botConfig.greeting_en;
-      if (greeting) speak(greeting, botConfig.voice_id || undefined);
+      if (greeting) setTimeout(() => speak(greeting, botConfig.voice_id || undefined), 1500);
     }
   }, [avatarState.status]); // eslint-disable-line react-hooks/exhaustive-deps
 

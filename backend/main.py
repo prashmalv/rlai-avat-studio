@@ -22,8 +22,9 @@ import json
 import logging
 import os
 import uuid
+import httpx
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
@@ -419,7 +420,7 @@ async def upload_bot_document(
         file_size=len(content),
         is_active=True,
         description=description,
-        uploaded_at=datetime.now(timezone.utc),
+        uploaded_at=datetime.utcnow(),
     )
     db.add(doc)
     await db.commit()
@@ -891,7 +892,7 @@ async def start_session(body: SessionStartRequest, db: AsyncSession = Depends(ge
         bot_slug=bot.slug,
         customer_name=body.customer_name,
         channel=body.channel,
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.utcnow(),
     )
     db.add(session)
     await db.commit()
@@ -931,7 +932,7 @@ async def end_session(body: SessionEndRequest, db: AsyncSession = Depends(get_db
     if session.ended_at:
         return {"session_id": session.id, "already_ended": True}
 
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     session.ended_at = now
     session.duration_seconds = int((now - session.started_at).total_seconds())
 
@@ -1017,7 +1018,7 @@ async def chat(body: ChatRequest, db: AsyncSession = Depends(get_db)):
     response_text = security.sanitize_output(response_text)
 
     # Persist messages
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     user_msg = Message(
         id=str(uuid.uuid4()),
         session_id=body.session_id,

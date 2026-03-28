@@ -7,7 +7,7 @@ Bot records. Handles slug uniqueness automatically on creation.
 
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import select
 
@@ -73,7 +73,7 @@ async def update_bot(db, bot_id: str, **kwargs) -> Bot | None:
     for key, value in kwargs.items():
         if hasattr(bot, key):
             setattr(bot, key, value)
-    bot.updated_at = datetime.now(timezone.utc)
+    bot.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(bot)
     return bot

@@ -412,6 +412,13 @@ async def query(
                 api_key=os.getenv("OPENAI_API_KEY", ""),
                 model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
             )
+        elif provider == "together":
+            return await _call_openai_compat(
+                prompt, system,
+                base_url="https://api.together.xyz/v1",
+                api_key=os.getenv("TOGETHER_API_KEY", ""),
+                model=os.getenv("TOGETHER_MODEL", "mistralai/Mixtral-8x7B-Instruct-v0.1"),
+            )
         else:
             return await _call_ollama(prompt, system)
     except Exception as e:
