@@ -499,10 +499,15 @@ async def generate_bot_suggestions(bot_id: str, db: AsyncSession = Depends(get_d
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Knowledge base query failed: {e}")
 
+    bot_name = bot.name or "Assistant"
     gen_prompt = (
-        "Based on this document content, generate:\n"
-        "1. A system_prompt (3-5 sentences) for a bilingual (Hindi+English) AI assistant named Priya.\n"
-        "2. Exactly 8 frequently asked questions with short answers.\n\n"
+        f"You are helping configure an AI avatar assistant named {bot_name}.\n"
+        f"Based on the document content below, generate:\n"
+        f"1. A system_prompt (3-4 sentences) that makes {bot_name} sound like a warm, natural, "
+        f"conversational person — NOT a formal robot. They should speak the same language the user uses "
+        f"(Hindi or English), give friendly helpful answers from the knowledge base, and NOT impose any "
+        f"format restrictions on the user. Do NOT include phrases like 'sirf X se related' or 'format me puchhe'.\n"
+        f"2. Exactly 8 frequently asked questions with short natural answers.\n\n"
         f"Document:\n{sample}\n\n"
         'Return ONLY valid JSON (no markdown, no extra text):\n'
         '{"system_prompt":"...","faqs":[{"q":"...","a":"..."}]}'
@@ -518,6 +523,20 @@ async def generate_bot_suggestions(bot_id: str, db: AsyncSession = Depends(get_d
             )
         elif llm_provider == "anthropic":
             result_text = await rag._call_anthropic(gen_prompt, "Output only valid JSON.")
+        elif llm_provider == "together":
+            result_text = await rag._call_openai_compat(
+                gen_prompt, "You output only valid JSON. No markdown. No explanation.",
+                base_url="https://api.together.xyz/v1",
+                api_key=os.getenv("TOGETHER_API_KEY", ""),
+                model=os.getenv("TOGETHER_MODEL", "mistralai/Mixtral-8x7B-Instruct-v0.1"),
+            )
+        elif llm_provider == "openai":
+            result_text = await rag._call_openai_compat(
+                gen_prompt, "You output only valid JSON. No markdown. No explanation.",
+                base_url="https://api.openai.com/v1",
+                api_key=os.getenv("OPENAI_API_KEY", ""),
+                model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            )
         else:
             raise ValueError(f"LLM provider {llm_provider} not supported for suggestions")
 

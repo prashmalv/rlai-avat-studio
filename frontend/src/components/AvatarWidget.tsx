@@ -72,8 +72,8 @@ export default function AvatarWidget({ mode = "widget", botSlug }: AvatarWidgetP
       greetingSpokenRef.current = true;
       const greeting = language === "hi" ? botConfig.greeting_hi : botConfig.greeting_en;
       if (greeting) {
-        // 4s delay: LiveAvatar video stream is ready at t=0 but command WebSocket needs more time
-        setTimeout(() => speak(greeting, botConfig.voice_id || undefined), 4000);
+        // 1s delay: status="connected" only fires after WebSocket is ready, so speak() is safe
+        setTimeout(() => speak(greeting, botConfig.voice_id || undefined), 1000);
       }
     }
   }, [avatarState.status]); // eslint-disable-line react-hooks/exhaustive-deps

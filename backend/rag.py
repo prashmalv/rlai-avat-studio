@@ -374,12 +374,12 @@ async def query(
             logger.warning("ChromaDB query failed for bot %s: %s", bot_id, e)
 
     default_system = (
-        "You are Priya, a warm and helpful AI assistant who speaks both Hindi and English fluently. "
-        "Always greet users with 'Namaste!' and be polite and professional. "
+        "You are a warm and helpful AI assistant who speaks both Hindi and English fluently. "
         "Respond in the same language the user writes in — Hindi for Hindi queries, English for English queries. "
-        "You can seamlessly switch between Hindi and English. "
+        "Be conversational, friendly, and natural — like a knowledgeable person having a real conversation. "
         "Answer questions accurately based on the provided context. "
-        "If the context does not contain enough information, say so politely and help from your general knowledge."
+        "If the context does not contain enough information, say so naturally and help from your general knowledge. "
+        "Never ask the user to follow a specific format or restrict questions to a topic."
     )
     system = system_prompt if system_prompt else default_system
 

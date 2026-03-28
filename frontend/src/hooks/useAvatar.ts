@@ -333,16 +333,18 @@ export function useAvatar(
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error("LiveAvatar connection timeout after 30s")), 30000);
 
-        // SESSION_STREAM_READY: video is ready — show video immediately
+        // SESSION_STREAM_READY: video is ready but WebSocket NOT yet open — do NOT set connected yet
         session.on(SessionEvent.SESSION_STREAM_READY, () => {
-          setState({ status: "connected" });
+          // Video is available; AvatarDisplay will call attachToElement to show it.
+          // Do NOT set status="connected" here — message() will fail until WebSocket is ready.
         });
 
-        // SESSION_STATE_CHANGED with CONNECTED: WebSocket command channel is also ready
-        // Only now can session.message() be called reliably
+        // SESSION_STATE_CHANGED with CONNECTED: both video AND WebSocket command channel are ready.
+        // Only now is it safe to call session.message() reliably.
         session.on(SessionEvent.SESSION_STATE_CHANGED, (state: typeof SessionState[keyof typeof SessionState]) => {
           if (state === SessionState.CONNECTED) {
             clearTimeout(timeout);
+            setState({ status: "connected" });
             resolve();
           }
         });
