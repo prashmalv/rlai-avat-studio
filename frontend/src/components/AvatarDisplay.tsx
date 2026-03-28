@@ -48,13 +48,13 @@ export default function AvatarDisplay({
     if (stream) {
       videoRef.current.srcObject = stream;
       videoRef.current.play().catch(() => {});
-    } else if (attachToElement) {
-      // LiveAvatar: attach as soon as the ref is available — the SDK buffers
-      // the video/audio track and plays it once the LiveKit room is ready.
-      // Do NOT wait for status="connected" since that now fires after WebSocket ready.
+    } else if (attachToElement && state.status === "connected") {
+      // LiveAvatar: session.attach(el) requires the session to be started.
+      // status="connected" only fires after SESSION_STATE_CHANGED(CONNECTED),
+      // so liveAvatarSessionRef is guaranteed to be set at this point.
       attachToElement(videoRef.current);
     }
-  }, [stream, attachToElement]);
+  }, [stream, attachToElement, state.status]);
 
   const providerLabel = PROVIDER_LABELS[provider] || provider;
 
