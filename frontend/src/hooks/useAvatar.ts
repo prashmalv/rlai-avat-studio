@@ -325,21 +325,32 @@ export function useAvatar(
   const connectLiveAvatar = useCallback(async (): Promise<boolean> => {
     try {
       setState({ status: "connecting" });
-      const { LiveAvatarSession, SessionEvent } = await import("@heygen/liveavatar-web-sdk");
+      const { LiveAvatarSession, SessionEvent, SessionState } = await import("@heygen/liveavatar-web-sdk");
       const tokenResp = await api.getLiveAvatarToken(avatarId || "bf00036b-558a-44b5-b2ff-1e3cec0f4ceb");
       const session = new LiveAvatarSession(tokenResp.session_token, {});
       liveAvatarSessionRef.current = session;
 
       await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error("LiveAvatar stream timeout after 30s")), 30000);
+        const timeout = setTimeout(() => reject(new Error("LiveAvatar connection timeout after 30s")), 30000);
+
+        // SESSION_STREAM_READY: video is ready — show video immediately
         session.on(SessionEvent.SESSION_STREAM_READY, () => {
-          clearTimeout(timeout);
           setState({ status: "connected" });
-          resolve();
         });
+
+        // SESSION_STATE_CHANGED with CONNECTED: WebSocket command channel is also ready
+        // Only now can session.message() be called reliably
+        session.on(SessionEvent.SESSION_STATE_CHANGED, (state: typeof SessionState[keyof typeof SessionState]) => {
+          if (state === SessionState.CONNECTED) {
+            clearTimeout(timeout);
+            resolve();
+          }
+        });
+
         session.on(SessionEvent.SESSION_DISCONNECTED, () => {
           setState({ status: "idle" });
         });
+
         session.start().catch((err: unknown) => {
           clearTimeout(timeout);
           reject(err);
