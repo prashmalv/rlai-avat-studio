@@ -20,7 +20,11 @@ _DID_BASE = "https://api.d-id.com"
 
 
 def _auth_header(api_key: str) -> dict:
-    """D-ID uses Basic auth: base64(api_key:)"""
+    """
+    D-ID API key format: base64(email):secret
+    For Basic auth the entire key is the username with empty password:
+      Authorization: Basic base64(api_key + ":")
+    """
     token = base64.b64encode(f"{api_key}:".encode()).decode()
     return {"Authorization": f"Basic {token}"}
 
@@ -40,7 +44,11 @@ class DIDProvider:
         headers = {**_auth_header(api_key), "Content-Type": "application/json"}
         payload: dict = {}
         if avatar_id:
-            payload["source_url"] = avatar_id  # D-ID uses image URL or presenter ID
+            # If it looks like a URL use source_url, otherwise treat as presenter_id
+            if avatar_id.startswith("http"):
+                payload["source_url"] = avatar_id
+            else:
+                payload["presenter_id"] = avatar_id
 
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
@@ -148,28 +156,50 @@ class DIDProvider:
             if resp.status_code not in (200, 204):
                 resp.raise_for_status()
 
+    # Featured avatars — shown in admin UI when API list is unavailable
+    FEATURED_AVATARS = [
+        {
+            "id": "rian-lFJH6K3P7P",
+            "name": "Rian (Male)",
+            "gender": "male",
+            "preview_image_url": "https://create-images-results.d-id.com/DefaultPresenters/Rian_f/image.jpeg",
+        },
+        {
+            "id": "amber-inlhe5eM0e",
+            "name": "Amber (Female)",
+            "gender": "female",
+            "preview_image_url": "https://create-images-results.d-id.com/DefaultPresenters/Amber_f/image.jpeg",
+        },
+    ]
+
     @staticmethod
     async def list_avatars(api_key: str) -> list[dict]:
         """
-        List available avatar presenters.
-        GET /clips/presenters
-        Returns list of {id, name, thumbnail_url}
+        Return featured avatars (Rian + Amber) plus any additional presenters
+        from the D-ID Clips Presenters API.
         """
-        headers = _auth_header(api_key)
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(
-                f"{_DID_BASE}/clips/presenters",
-                headers=headers,
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        result = list(DIDProvider.FEATURED_AVATARS)
+        featured_ids = {a["id"] for a in result}
 
-        presenters = data if isinstance(data, list) else data.get("presenters", [])
-        result = []
-        for p in presenters:
-            result.append({
-                "id": p.get("id", p.get("presenter_id", "")),
-                "name": p.get("name", p.get("presenter_name", "Unknown")),
-                "preview_image_url": p.get("thumbnail_url", p.get("image_url", None)),
-            })
+        try:
+            headers = _auth_header(api_key)
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(
+                    f"{_DID_BASE}/clips/presenters",
+                    headers=headers,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    presenters = data if isinstance(data, list) else data.get("presenters", [])
+                    for p in presenters:
+                        pid = p.get("id", p.get("presenter_id", ""))
+                        if pid and pid not in featured_ids:
+                            result.append({
+                                "id": pid,
+                                "name": p.get("name", p.get("presenter_name", "Unknown")),
+                                "preview_image_url": p.get("thumbnail_url", p.get("image_url")),
+                            })
+        except Exception:
+            pass  # Return featured avatars even if API call fails
+
         return result
