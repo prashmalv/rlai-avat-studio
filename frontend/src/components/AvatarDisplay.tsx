@@ -1,18 +1,6 @@
-/**
- * AvatarDisplay.tsx — Renders the live avatar video stream.
- *
- * Handles three states:
- *  1. idle / connecting — animated placeholder with provider name
- *  2. connected         — <video> element fed by the MediaStream
- *  3. error             — error message with retry button
- *
- * The component is intentionally display-only; all connection logic lives in
- * useAvatar. The parent passes `stream` and `status` as props.
- */
-
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AvatarState } from "@/hooks/useAvatar";
 
 interface AvatarDisplayProps {
@@ -41,52 +29,87 @@ export default function AvatarDisplay({
   attachToElement = null,
 }: AvatarDisplayProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [needsUnmute, setNeedsUnmute] = useState(false);
 
-  // Attach stream (old providers) or call attachToElement (LiveAvatar)
   useEffect(() => {
-    if (!videoRef.current) return;
+    const el = videoRef.current;
+    if (!el) return;
+
     if (stream) {
-      videoRef.current.srcObject = stream;
-      videoRef.current.play().catch(() => {});
+      el.srcObject = stream;
+      // Start muted so browser autoplay policy allows playback
+      el.muted = true;
+      el.play()
+        .then(() => {
+          // Playback started — try to unmute immediately
+          el.muted = false;
+          setNeedsUnmute(false);
+        })
+        .catch(() => {
+          // Autoplay allowed but audio blocked — show tap-to-unmute overlay
+          setNeedsUnmute(true);
+        });
     } else if (attachToElement && state.status === "connected") {
-      // LiveAvatar: session.attach(el) requires the session to be started.
-      // status="connected" only fires after SESSION_STATE_CHANGED(CONNECTED),
-      // so liveAvatarSessionRef is guaranteed to be set at this point.
-      attachToElement(videoRef.current);
+      // LiveAvatar: session.attach(el) sets srcObject internally via LiveKit.
+      // Pass element already muted so LiveKit's internal play() succeeds.
+      el.muted = true;
+      attachToElement(el);
+      // After attach, try unmuting — LiveKit will have called play() by now
+      setTimeout(() => {
+        if (el) {
+          el.muted = false;
+          setNeedsUnmute(false);
+        }
+      }, 500);
     }
   }, [stream, attachToElement, state.status]);
 
+  const handleUnmute = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = false;
+      videoRef.current.play().catch(() => {});
+      setNeedsUnmute(false);
+    }
+  };
+
   const providerLabel = PROVIDER_LABELS[provider] || provider;
+  const isVisible = state.status === "connected" && (stream || attachToElement);
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center bg-gray-900 rounded-xl overflow-hidden">
-      {/* Video — always rendered, hidden when no stream */}
+    <div
+      className="relative w-full h-full flex items-center justify-center bg-gray-900 rounded-xl overflow-hidden"
+      onClick={needsUnmute ? handleUnmute : undefined}
+    >
       <video
         ref={videoRef}
         autoPlay
         playsInline
-        muted={false}
         className={`w-full h-full object-cover transition-opacity duration-500 ${
-          state.status === "connected" && (stream || attachToElement) ? "opacity-100" : "opacity-0"
+          isVisible ? "opacity-100" : "opacity-0"
         }`}
       />
 
+      {/* Tap-to-unmute overlay */}
+      {needsUnmute && isVisible && (
+        <div className="absolute inset-0 flex items-center justify-center cursor-pointer">
+          <div className="bg-black/60 backdrop-blur-sm rounded-full px-4 py-2 flex items-center gap-2">
+            <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M16.5 12A4.5 4.5 0 0 0 14 7.97v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06A8.99 8.99 0 0 0 17.73 18l1.27 1.26L20.27 18 5.27 3 4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+            </svg>
+            <span className="text-white text-sm font-medium">Tap to unmute</span>
+          </div>
+        </div>
+      )}
+
       {/* Placeholder shown when not connected */}
-      {(state.status !== "connected" || (!stream && !attachToElement)) && (
+      {!isVisible && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
-          {/* Animated avatar silhouette */}
           <div className="relative">
             <div className="w-24 h-24 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center">
-              <svg
-                className="w-14 h-14 text-white"
-                fill="currentColor"
-                viewBox="0 0 24 24"
-              >
+              <svg className="w-14 h-14 text-white" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
               </svg>
             </div>
-
-            {/* Connecting pulsing ring */}
             {state.status === "connecting" && (
               <>
                 <div className="absolute inset-0 rounded-full border-2 border-orange-400 animate-ping opacity-75" />
@@ -99,19 +122,15 @@ export default function AvatarDisplay({
             <p className="text-white font-semibold text-lg">{botName}</p>
             {state.status === "connecting" && (
               <p className="text-orange-300 text-sm mt-1 animate-pulse">
-                {hideProvider ? "Connecting\u2026" : `Connecting via ${providerLabel}...`}
+                {hideProvider ? "Connecting…" : `Connecting via ${providerLabel}...`}
               </p>
             )}
             {state.status === "idle" && (
-              <p className="text-gray-400 text-sm mt-1">
-                AI Avatar ready
-              </p>
+              <p className="text-gray-400 text-sm mt-1">AI Avatar ready</p>
             )}
             {state.status === "error" && (
               <div className="mt-2">
-                <p className="text-red-400 text-sm">
-                  {state.error || "Connection failed"}
-                </p>
+                <p className="text-red-400 text-sm">{state.error || "Connection failed"}</p>
                 {onRetry && (
                   <button
                     onClick={onRetry}
